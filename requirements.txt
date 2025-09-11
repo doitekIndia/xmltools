@@ -1,2 +1,11 @@
-streamlit
-cryptography
+# Backend server requirements for Flask email API
+flask
+# Email support is built-in (smtplib), no external needed
+
+# EXE client (tkinter) - no pip install needed, always in stdlib
+# If you use requests (for HTTP POST in client):
+requests
+
+# If running on PythonAnywhere/Heroku/production, pin versions for safety:
+# flask==3.0.3
+# requests==2.31.0
