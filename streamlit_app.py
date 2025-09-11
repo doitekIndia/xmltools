@@ -9,9 +9,7 @@ EMAIL_FROM = "hikvisionxml@gmail.com"
 EMAIL_TO = "xmlkeyserver@gmail.com"
 EMAIL_PASSWORD = st.secrets["email"]["app_password"]
 EXE_TOKEN = st.secrets["backend"]["exe_token"]
-
-# Example license keys (in production, store securely!)
-LICENSE_KEYS = st.secrets["backend"]["licenses"]  # e.g., {"USER1": "ABC123", "USER2": "XYZ456"}
+LICENSE_KEYS = st.secrets["backend"]["licenses"]
 
 # -------------------- Send email --------------------
 def send_notification(email, serial, file_name, file_content_b64):
@@ -29,36 +27,43 @@ def send_notification(email, serial, file_name, file_content_b64):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL_FROM, EMAIL_PASSWORD)
         server.send_message(msg)
-    return True
 
 # -------------------- API Endpoint --------------------
+st.set_page_config(page_title="🔑 XML Key Backend", page_icon="🔒")
+st.title("🔑 XML Key Generator Backend")
+
+# Only show EXE endpoint if ?api=1 in URL
 query_params = st.query_params
-if "api" in query_params:
+if query_params.get("api") == ["1"]:
+    st.subheader("API is live (for EXE client)")
     try:
-        data = st.experimental_get_query_params().get("data")
-        if data:
-            data = json.loads(data[0])
+        # EXE client POST simulation
+        data_raw = st.text_area("Paste JSON payload from EXE", "")
+        if not data_raw:
+            st.info("Waiting for data from EXE...")
         else:
-            st.json({"status": "error", "message": "No data provided"}); st.stop()
+            data = json.loads(data_raw)
 
-        # Check token
-        if data.get("token") != EXE_TOKEN:
-            st.json({"status": "error", "message": "Invalid token. Buy the EXE."}); st.stop()
+            # Validate token
+            if data.get("token") != EXE_TOKEN:
+                st.json({"status": "error", "message": "Invalid token. Buy the EXE."})
+                st.stop()
 
-        # Check license key
-        license_key = data.get("license_key")
-        if license_key not in LICENSE_KEYS.values():
-            st.json({"status": "error", "message": "Invalid license key. Buy a valid license."})
-            st.stop()
+            # Validate license key
+            if data.get("license_key") not in LICENSE_KEYS.values():
+                st.json({"status": "error", "message": "Invalid license key. Buy a valid license."})
+                st.stop()
 
-        # Process request
-        email = data.get("email")
-        serial = data.get("serial")
-        file_name = data.get("file_name")
-        file_content = data.get("file_content")
+            # Extract request data
+            email = data.get("email")
+            serial = data.get("serial")
+            file_name = data.get("file_name")
+            file_content = data.get("file_content")
 
-        send_notification(email, serial, file_name, file_content)
-        st.json({"status": "success", "message": "Request submitted successfully"})
+            # Send email
+            send_notification(email, serial, file_name, file_content)
+
+            st.json({"status": "success", "message": "Request submitted successfully"})
     except Exception as e:
         st.json({"status": "error", "message": str(e)})
 else:
