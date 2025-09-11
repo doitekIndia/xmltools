@@ -1,7 +1,5 @@
 import streamlit as st
-import smtplib
-import json
-import base64
+import smtplib, json, base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
@@ -17,7 +15,7 @@ def send_notification(email, serial, file_name, file_content_b64):
     msg["From"] = EMAIL_FROM
     msg["To"] = EMAIL_TO
     msg["Subject"] = "New XML Key Request Received"
-
+    
     body = f"A new XML key request has been submitted.\n\nEmail: {email}\nSerial: {serial}\nFile: {file_name}"
     msg.attach(MIMEText(body, "plain"))
 
@@ -32,45 +30,30 @@ def send_notification(email, serial, file_name, file_content_b64):
     return True
 
 # -------------------- API Endpoint --------------------
-# Only allow POST JSON requests from EXE
-if st.session_state.get("request_method", None) != "POST":
-    st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
-    st.stop()
+query_params = st.query_params
 
-# Attempt to parse JSON POST body
-try:
-    data_raw = st.experimental_get_query_params().get("data", [None])[0]  # optional GET fallback
-    if not data_raw:
-        data = st.experimental_get_query_params().get("data")  # fallback
-        if not data:
-            st.json({"status": "error", "message": "Only EXE POST requests are allowed"})
+if "data" in query_params:
+    try:
+        data_json = query_params.get("data")[0]
+        data = json.loads(data_json)
+
+        # Required fields
+        email = data.get("email")
+        serial = data.get("serial")
+        file_name = data.get("file_name")
+        file_content = data.get("file_content")
+
+        if not all([email, serial, file_name, file_content]):
+            st.json({"status": "error", "message": "Missing required fields"})
             st.stop()
-    else:
-        data = json.loads(data_raw)
 
-except Exception as e:
-    st.json({"status": "error", "message": f"Failed to parse request: {e}"})
-    st.stop()
+        # Send email notification
+        send_notification(email, serial, file_name, file_content)
+        st.json({"status": "success",
+                 "message": "Request submitted successfully!\nYou will receive confirmation via email for processing soon."})
 
-# -------------------- Extract fields --------------------
-email = data.get("email")
-serial = data.get("serial")
-file_name = data.get("file_name")
-file_content = data.get("file_content")
+    except Exception as e:
+        st.json({"status": "error", "message": str(e)})
 
-if not all([email, serial, file_name, file_content]):
-    st.json({"status": "error", "message": "Missing required fields"})
-    st.stop()
-
-# Optional: validate email/serial (e.g., check PayPal match)
-# if not valid_user(email, serial): st.json({"status":"error","message":"Unauthorized"}); st.stop()
-
-# -------------------- Send email --------------------
-try:
-    send_notification(email, serial, file_name, file_content)
-    st.json({
-        "status": "success",
-        "message": "Request submitted successfully!\nYou will receive confirmation via email for processing soon."
-    })
-except Exception as e:
-    st.json({"status": "error", "message": f"Failed to send email: {e}"})
+else:
+    st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
