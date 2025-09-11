@@ -33,6 +33,7 @@ st.set_page_config(page_title="🔑 Secure XML Key Generator", page_icon="🔒")
 st.title("🔑 Secure XML Key Generator API (Streamlit)")
 st.write("This page provides an **API endpoint**. The EXE client will call it securely.")
 
+# --- Manual form for testing ---
 st.subheader("Test API here (manual form)")
 email = st.text_input("Email")
 serial = st.text_input("Serial")
@@ -47,7 +48,7 @@ if st.button("Generate Key"):
         st.code(json.dumps({"key_xml": key_xml, "signature": signature}, indent=2), language="json")
 
 # --- API Endpoint Simulation ---
-query_params = st.experimental_get_query_params()
+query_params = st.query_params  # <-- updated API
 if "api" in query_params:
     import sys
     body = sys.stdin.read()
