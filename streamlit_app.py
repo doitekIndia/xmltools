@@ -3,16 +3,21 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+import json
+import base64
 
 # --- Load email app password from Streamlit secrets ---
 EMAIL_FROM = "hikvisionxml@gmail.com"
 EMAIL_TO = "xmlkeyserver@gmail.com"
-EMAIL_PASSWORD = st.secrets["email"]["app_password"]  # securely stored in Streamlit secrets
+EMAIL_PASSWORD = st.secrets["email"]["app_password"]
+
+# --- Secret token for EXE authentication ---
+EXE_TOKEN = st.secrets["backend"]["exe_token"]  # securely stored in Streamlit secrets
 
 # --- Function to send notification email with attachment ---
-def send_notification(email: str, serial: str, uploaded_file):
+def send_notification(email: str, serial: str, file_name: str, file_content: bytes):
     subject = "New XML Key Request Received"
-    body = f"A new XML key request has been submitted.\n\nEmail: {email}\nSerial: {serial}\nFile: {uploaded_file.name}"
+    body = f"A new XML key request has been submitted.\n\nEmail: {email}\nSerial: {serial}\nFile: {file_name}"
     
     msg = MIMEMultipart()
     msg["From"] = EMAIL_FROM
@@ -20,13 +25,10 @@ def send_notification(email: str, serial: str, uploaded_file):
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
 
-    # Attach the uploaded XML file
-    file_content = uploaded_file.read()
     attachment = MIMEApplication(file_content, _subtype="xml")
-    attachment.add_header('Content-Disposition', 'attachment', filename=uploaded_file.name)
+    attachment.add_header('Content-Disposition', 'attachment', filename=file_name)
     msg.attach(attachment)
 
-    # Send the email
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL_FROM, EMAIL_PASSWORD)
         server.send_message(msg)
@@ -35,16 +37,26 @@ def send_notification(email: str, serial: str, uploaded_file):
 st.set_page_config(page_title="🔑 XML Key Request Backend", page_icon="🔒")
 st.title("🔑 XML Key Request Backend")
 
-st.subheader("Upload your XML file")
-email = st.text_input("Email")
-serial = st.text_input("Serial")
-uploaded_file = st.file_uploader("Upload XML file", type=["xml"])
+# --- Detect API requests from EXE ---
+query_params = st.experimental_get_query_params()
+if "api" in query_params:
+    import sys
+    body = sys.stdin.read()
+    try:
+        data = json.loads(body)
+        # --- Check EXE token ---
+        if data.get("token") != EXE_TOKEN:
+            st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
+            sys.exit()
 
-if st.button("Submit Request"):
-    if not email or not serial or not uploaded_file:
-        st.error("Please fill all fields and upload an XML file.")
-    else:
-        # Send notification email with the uploaded XML file attached
-        send_notification(email, serial, uploaded_file)
-        
-        st.success("Request submitted successfully! You will receive the XML file via email.")
+        file_name = data.get("file_name", "uploaded.xml")
+        file_content_b64 = data.get("file_content")
+        file_content = base64.b64decode(file_content_b64)
+        send_notification(data["email"], data["serial"], file_name, file_content)
+        print(json.dumps({"status": "success"}))
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+
+else:
+    # --- Manual browser upload disabled ---
+    st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
