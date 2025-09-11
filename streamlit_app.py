@@ -3,24 +3,23 @@ import smtplib, json, base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
-from urllib.parse import unquote
 
 # -------------------- Load secrets --------------------
 EMAIL_FROM = "hikvisionxml@gmail.com"
 EMAIL_TO = "xmlkeyserver@gmail.com"
 EMAIL_PASSWORD = st.secrets["email"]["app_password"]
-EXE_TOKEN = st.secrets["backend"]["exe_token"]
-LICENSE_KEYS = st.secrets["backend"]["licenses"]
 
-# -------------------- Send email --------------------
+# -------------------- Function to send email --------------------
 def send_notification(email, serial, file_name, file_content_b64):
     msg = MIMEMultipart()
     msg["From"] = EMAIL_FROM
     msg["To"] = EMAIL_TO
     msg["Subject"] = "New XML Key Request Received"
-    body = f"Email: {email}\nSerial: {serial}\nFile: {file_name}"
+    
+    body = f"A new XML key request has been submitted.\n\nEmail: {email}\nSerial: {serial}\nFile: {file_name}"
     msg.attach(MIMEText(body, "plain"))
 
+    # Attach uploaded XML
     attachment = MIMEApplication(base64.b64decode(file_content_b64), _subtype="xml")
     attachment.add_header("Content-Disposition", "attachment", filename=file_name)
     msg.attach(attachment)
@@ -28,42 +27,41 @@ def send_notification(email, serial, file_name, file_content_b64):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL_FROM, EMAIL_PASSWORD)
         server.send_message(msg)
+    return True
 
 # -------------------- API Endpoint --------------------
-st.set_page_config(page_title="🔑 XML Key Backend", page_icon="🔒")
-st.title("🔑 XML Key Generator Backend")
-
 query_params = st.query_params
 
-# EXE client sends ?api=1&data=<URL-encoded JSON>
-if query_params.get("api") == ["1"] and query_params.get("data"):
+if "api" in query_params:
+    # Only accept JSON POST/GET from EXE
     try:
-        data_json = unquote(query_params.get("data")[0])  # decode URL-encoded JSON
+        data_json = query_params.get("data", [None])[0]
+        if not data_json:
+            st.json({"status": "error", "message": "No data provided"})
+            st.stop()
+        
         data = json.loads(data_json)
 
-        # Validate EXE token
-        if data.get("token") != EXE_TOKEN:
-            st.json({"status": "error", "message": "Invalid token. Buy the EXE."})
-            st.stop()
-
-        # Validate license key
-        if data.get("license_key") not in LICENSE_KEYS.values():
-            st.json({"status": "error", "message": "Invalid license key. Buy a valid license."})
-            st.stop()
-
-        # Extract submission
+        # Required fields
         email = data.get("email")
         serial = data.get("serial")
         file_name = data.get("file_name")
-        file_content = data.get("file_content")  # must be base64
+        file_content = data.get("file_content")
 
-        # Send email notification with XML attachment
+        if not all([email, serial, file_name, file_content]):
+            st.json({"status": "error", "message": "Missing required fields"})
+            st.stop()
+
+        # Optional: You can add email/serial verification here before sending
+        # Example: only send if user email matches PayPal or other record
+        # if not valid_user(email, serial): st.json({"status": "error", "message": "Unauthorized"}); st.stop()
+
         send_notification(email, serial, file_name, file_content)
-
-        st.json({"status": "success", "message": "Request submitted successfully"})
+        st.json({"status": "success", "message": "Request submitted successfully. Email sent for processing."})
 
     except Exception as e:
         st.json({"status": "error", "message": str(e)})
 
 else:
+    # Browser access blocked
     st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
