@@ -3,6 +3,7 @@ import smtplib, json, base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from urllib.parse import unquote
 
 # -------------------- Load secrets --------------------
 EMAIL_FROM = "hikvisionxml@gmail.com"
@@ -32,39 +33,37 @@ def send_notification(email, serial, file_name, file_content_b64):
 st.set_page_config(page_title="🔑 XML Key Backend", page_icon="🔒")
 st.title("🔑 XML Key Generator Backend")
 
-# Only show EXE endpoint if ?api=1 in URL
 query_params = st.query_params
-if query_params.get("api") == ["1"]:
-    st.subheader("API is live (for EXE client)")
+
+# EXE client sends ?api=1&data=<URL-encoded JSON>
+if query_params.get("api") == ["1"] and query_params.get("data"):
     try:
-        # EXE client POST simulation
-        data_raw = st.text_area("Paste JSON payload from EXE", "")
-        if not data_raw:
-            st.info("Waiting for data from EXE...")
-        else:
-            data = json.loads(data_raw)
+        data_json = unquote(query_params.get("data")[0])  # decode URL-encoded JSON
+        data = json.loads(data_json)
 
-            # Validate token
-            if data.get("token") != EXE_TOKEN:
-                st.json({"status": "error", "message": "Invalid token. Buy the EXE."})
-                st.stop()
+        # Validate EXE token
+        if data.get("token") != EXE_TOKEN:
+            st.json({"status": "error", "message": "Invalid token. Buy the EXE."})
+            st.stop()
 
-            # Validate license key
-            if data.get("license_key") not in LICENSE_KEYS.values():
-                st.json({"status": "error", "message": "Invalid license key. Buy a valid license."})
-                st.stop()
+        # Validate license key
+        if data.get("license_key") not in LICENSE_KEYS.values():
+            st.json({"status": "error", "message": "Invalid license key. Buy a valid license."})
+            st.stop()
 
-            # Extract request data
-            email = data.get("email")
-            serial = data.get("serial")
-            file_name = data.get("file_name")
-            file_content = data.get("file_content")
+        # Extract submission
+        email = data.get("email")
+        serial = data.get("serial")
+        file_name = data.get("file_name")
+        file_content = data.get("file_content")  # must be base64
 
-            # Send email
-            send_notification(email, serial, file_name, file_content)
+        # Send email notification with XML attachment
+        send_notification(email, serial, file_name, file_content)
 
-            st.json({"status": "success", "message": "Request submitted successfully"})
+        st.json({"status": "success", "message": "Request submitted successfully"})
+
     except Exception as e:
         st.json({"status": "error", "message": str(e)})
+
 else:
     st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
