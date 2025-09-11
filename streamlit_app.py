@@ -1,79 +1,101 @@
-import streamlit as st
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-import json, base64
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import requests, base64, os, sys, json
 
-# -------------------- Load secrets --------------------
-EMAIL_FROM = "hikvisionxml@gmail.com"
-EMAIL_TO = "xmlkeyserver@gmail.com"
-EMAIL_PASSWORD = st.secrets["email"]["app_password"]
-EXE_TOKEN = st.secrets["backend"]["exe_token"]
+# -------------------- Configuration --------------------
+API_URL = "https://xmltools-g8vtzxnjbz7q3nuf3qj4y3.streamlit.app/?api=1"
+EXE_TOKEN = "h3K7z9Pq2LxVbT8mR4sQ"  # must match Streamlit backend
 
-# -------------------- Function to send email --------------------
-def send_notification(email: str, serial: str, file_name: str, file_content_b64: str):
+# -------------------- Functions --------------------
+def on_get():
+    email = email_var.get().strip()
+    serial = serial_var.get().strip()
+    license_key = license_var.get().strip()
+    xml_path = src_var.get().strip()
+
+    if not email or not serial or not license_key or not xml_path:
+        messagebox.showwarning("Missing Info", "⚠️ Please fill all fields and select XML file.")
+        return
+
     try:
-        subject = "New XML Key Request Received"
-        body = f"A new XML key request has been submitted.\n\nEmail: {email}\nSerial: {serial}\nFile: {file_name}"
-
-        msg = MIMEMultipart()
-        msg["From"] = EMAIL_FROM
-        msg["To"] = EMAIL_TO
-        msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
-
-        # Attach the uploaded XML file (base64 decoded)
-        attachment = MIMEApplication(base64.b64decode(file_content_b64), _subtype="xml")
-        attachment.add_header("Content-Disposition", "attachment", filename=file_name)
-        msg.attach(attachment)
-
-        # Send the email
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(EMAIL_FROM, EMAIL_PASSWORD)
-            server.send_message(msg)
+        with open(xml_path, "rb") as f:
+            xml_content = f.read()
+            xml_b64 = base64.b64encode(xml_content).decode()
     except Exception as e:
-        st.error(f"Failed to send email: {e}")
-        return False
-    return True
+        messagebox.showerror("File Error", str(e))
+        return
 
-# -------------------- Streamlit UI --------------------
-st.set_page_config(page_title="🔑 XML Key Request Backend", page_icon="🔒")
-st.title("🔑 XML Key Request Backend")
+    payload = {
+        "email": email,
+        "serial": serial,
+        "file_name": os.path.basename(xml_path),
+        "file_content": xml_b64,
+        "token": EXE_TOKEN,
+        "license_key": license_key
+    }
 
-# -------------------- Detect API request --------------------
-query_params = st.query_params
-if "api" in query_params:
-    # Backend API mode
     try:
-        # Read JSON POST body
-        body = st.experimental_get_query_params().get("body")
-        if body:
-            data = json.loads(body[0])
-        else:
-            data = json.loads(st.experimental_get_query_params()["data"][0])  # fallback if using ?data=
-
-        # Token check
-        if data.get("token") != EXE_TOKEN:
-            st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
-            st.stop()
-
-        email = data.get("email")
-        serial = data.get("serial")
-        file_name = data.get("file_name")
-        file_content_b64 = data.get("file_content")
-
-        if not email or not serial or not file_name or not file_content_b64:
-            st.error("Invalid data received.")
-            st.stop()
-
-        if send_notification(email, serial, file_name, file_content_b64):
-            st.json({"status": "success", "message": "Request submitted successfully"})
-        else:
-            st.json({"status": "error", "message": "Failed to send email"})
-
+        r = requests.post(API_URL, json=payload, timeout=30)
+        data = r.json()
     except Exception as e:
-        st.json({"status": "error", "message": str(e)})
-else:
-    # Manual access blocked
-    st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
+        messagebox.showerror("Server Error", str(e))
+        return
+
+    if data.get("status") != "success":
+        messagebox.showerror("Error", data.get("message", "Unknown error"))
+        return
+
+    save_path = filedialog.asksaveasfilename(
+        defaultextension=".xml",
+        filetypes=[("XML files","*.xml"),("All files","*.*")],
+        initialfile=f"xmlkey_{serial}.xml"
+    )
+    if not save_path:
+        return
+
+    key_xml = data.get("key_xml")  # Optional: backend can return XML content
+    if key_xml:
+        with open(save_path, "w", encoding="utf-8") as f:
+            f.write(key_xml)
+
+    messagebox.showinfo("✅ Success", f"Request submitted successfully.\nSaved XML key to:\n{save_path}")
+
+# -------------------- GUI --------------------
+root = tk.Tk()
+root.title("🔑 Secure XML Generator")
+root.geometry("600x300")
+root.configure(bg="#f8f9fa")
+root.resizable(False, False)
+
+font_label = ("Segoe UI", 11)
+font_entry = ("Segoe UI", 11)
+font_button = ("Segoe UI", 12, "bold")
+
+# Row 1: Email
+tk.Label(root, text="Your Email ID:", bg="#f8f9fa", font=font_label).grid(row=0, column=0, sticky="e", padx=15, pady=12)
+email_var = tk.StringVar()
+tk.Entry(root, textvariable=email_var, width=45, font=font_entry).grid(row=0, column=1, padx=5, pady=12, sticky="w")
+
+# Row 2: Serial
+tk.Label(root, text="Device Full Serial Number:", bg="#f8f9fa", font=font_label).grid(row=1, column=0, sticky="e", padx=15, pady=12)
+serial_var = tk.StringVar()
+tk.Entry(root, textvariable=serial_var, width=45, font=font_entry).grid(row=1, column=1, padx=5, pady=12, sticky="w")
+
+# Row 3: License Key
+tk.Label(root, text="Your License Key:", bg="#f8f9fa", font=font_label).grid(row=2, column=0, sticky="e", padx=15, pady=12)
+license_var = tk.StringVar()
+tk.Entry(root, textvariable=license_var, width=45, font=font_entry).grid(row=2, column=1, padx=5, pady=12, sticky="w")
+
+# Row 4: XML File
+tk.Label(root, text="Attach XML File:", bg="#f8f9fa", font=font_label).grid(row=3, column=0, sticky="e", padx=15, pady=12)
+src_var = tk.StringVar()
+tk.Entry(root, textvariable=src_var, width=38, font=font_entry).grid(row=3, column=1, padx=(5,0), pady=12, sticky="w")
+def browse_file():
+    p = filedialog.askopenfilename(filetypes=[("XML Files","*.xml"),("All files","*.*")])
+    if p: src_var.set(p)
+tk.Button(root, text="...", command=browse_file, width=4).grid(row=3, column=2, padx=5, pady=12)
+
+# Row 5: Get Button
+tk.Button(root, text="Get XML Key", command=on_get, bg="#0078d7", fg="white", font=font_button, width=14).grid(row=4, column=1, pady=20)
+
+root.mainloop()
