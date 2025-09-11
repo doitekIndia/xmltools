@@ -2,14 +2,17 @@ import streamlit as st
 import hashlib, base64, json
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
 
-# Load private key (server only, never share!)
-with open("private_key.pem", "rb") as f:
-    PRIVATE_KEY = serialization.load_pem_private_key(f.read(), password=None, backend=default_backend())
+# --- Load private key securely from Streamlit secrets ---
+private_key_pem = st.secrets["private_keys"]["my_private_key"]
 
+PRIVATE_KEY = serialization.load_pem_private_key(
+    private_key_pem.encode(),  # convert string to bytes
+    password=None
+)
+
+# --- Functions ---
 def generate_key_xml(email: str, serial: str, xml: str) -> str:
-    # 🔒 Replace this with your actual secret algorithm
     h = hashlib.sha256()
     h.update(email.encode())
     h.update(serial.encode())
@@ -25,15 +28,12 @@ def sign_message(message: bytes) -> str:
     )
     return base64.b64encode(signature).decode()
 
+# --- Streamlit UI ---
 st.set_page_config(page_title="🔑 Secure XML Key Generator", page_icon="🔒")
-
 st.title("🔑 Secure XML Key Generator API (Streamlit)")
-
 st.write("This page provides an **API endpoint**. The EXE client will call it securely.")
 
-# --- API Simulation ---
 st.subheader("Test API here (manual form)")
-
 email = st.text_input("Email")
 serial = st.text_input("Serial")
 xml_input = st.text_area("XML content")
@@ -46,8 +46,7 @@ if st.button("Generate Key"):
         signature = sign_message(key_xml.encode())
         st.code(json.dumps({"key_xml": key_xml, "signature": signature}, indent=2), language="json")
 
-# --- API Endpoint ---
-# Clients can POST here: https://your-app.streamlit.app/?api=1
+# --- API Endpoint Simulation ---
 query_params = st.experimental_get_query_params()
 if "api" in query_params:
     import sys
