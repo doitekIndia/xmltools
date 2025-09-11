@@ -8,8 +8,8 @@ import json, base64
 # -------------------- Load secrets --------------------
 EMAIL_FROM = "hikvisionxml@gmail.com"
 EMAIL_TO = "xmlkeyserver@gmail.com"
-EMAIL_PASSWORD = st.secrets["email"]["app_password"]   # Gmail app password
-EXE_TOKEN = st.secrets["backend"]["exe_token"]         # EXE token
+EMAIL_PASSWORD = st.secrets["email"]["app_password"]
+EXE_TOKEN = st.secrets["backend"]["exe_token"]
 
 # -------------------- Function to send email --------------------
 def send_notification(email: str, serial: str, file_name: str, file_content_b64: str):
@@ -77,19 +77,3 @@ if "api" in query_params:
 else:
     # Manual access blocked
     st.error("❌ Please buy XML Key Generator EXE from: https://doitek.streamlit.app/")
-
-# -------------------- Optional manual upload UI --------------------
-st.subheader("Manual Upload (for testing)")
-email_input = st.text_input("Email")
-serial_input = st.text_input("Serial")
-uploaded_file = st.file_uploader("Upload XML file", type=["xml"])
-
-if st.button("Submit Request"):
-    if not email_input or not serial_input or not uploaded_file:
-        st.error("Please fill all fields and upload an XML file.")
-    else:
-        file_content_b64 = base64.b64encode(uploaded_file.read()).decode()
-        if send_notification(email_input, serial_input, uploaded_file.name, file_content_b64):
-            st.success("Request submitted successfully!")
-        else:
-            st.error("Failed to send request.")
