@@ -1,61 +1,50 @@
 import streamlit as st
-import hashlib, base64, json
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 
-# --- Load private key securely from Streamlit secrets ---
-private_key_pem = st.secrets["private_keys"]["my_private_key"]
+# --- Load email app password from Streamlit secrets ---
+EMAIL_FROM = "hikvisionxml@gmail.com"
+EMAIL_TO = "xmlkeyserver@gmail.com"
+EMAIL_PASSWORD = st.secrets["email"]["app_password"]  # securely stored in Streamlit secrets
 
-PRIVATE_KEY = serialization.load_pem_private_key(
-    private_key_pem.encode(),  # convert string to bytes
-    password=None
-)
+# --- Function to send notification email with attachment ---
+def send_notification(email: str, serial: str, uploaded_file):
+    subject = "New XML Key Request Received"
+    body = f"A new XML key request has been submitted.\n\nEmail: {email}\nSerial: {serial}\nFile: {uploaded_file.name}"
+    
+    msg = MIMEMultipart()
+    msg["From"] = EMAIL_FROM
+    msg["To"] = EMAIL_TO
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
-# --- Functions ---
-def generate_key_xml(email: str, serial: str, xml: str) -> str:
-    h = hashlib.sha256()
-    h.update(email.encode())
-    h.update(serial.encode())
-    h.update(xml.encode())
-    digest = h.hexdigest()
-    return f'<?xml version="1.0" encoding="UTF-8"?><XMLKey><Email>{email}</Email><Serial>{serial}</Serial><Key>{digest}</Key></XMLKey>'
+    # Attach the uploaded XML file
+    file_content = uploaded_file.read()
+    attachment = MIMEApplication(file_content, _subtype="xml")
+    attachment.add_header('Content-Disposition', 'attachment', filename=uploaded_file.name)
+    msg.attach(attachment)
 
-def sign_message(message: bytes) -> str:
-    signature = PRIVATE_KEY.sign(
-        message,
-        padding.PKCS1v15(),
-        hashes.SHA256()
-    )
-    return base64.b64encode(signature).decode()
+    # Send the email
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(EMAIL_FROM, EMAIL_PASSWORD)
+        server.send_message(msg)
 
 # --- Streamlit UI ---
-st.set_page_config(page_title="🔑 Secure XML Key Generator", page_icon="🔒")
-st.title("🔑 Secure XML Key Generator API (Streamlit)")
-st.write("This page provides an **API endpoint**. The EXE client will call it securely.")
+st.set_page_config(page_title="🔑 XML Key Request Backend", page_icon="🔒")
+st.title("🔑 XML Key Request Backend")
 
-# --- Manual form for testing ---
-st.subheader("Test API here (manual form)")
+st.subheader("Upload your XML file")
 email = st.text_input("Email")
 serial = st.text_input("Serial")
-xml_input = st.text_area("XML content")
+uploaded_file = st.file_uploader("Upload XML file", type=["xml"])
 
-if st.button("Generate Key"):
-    if not email or not serial or not xml_input:
-        st.error("Please fill all fields.")
+if st.button("Submit Request"):
+    if not email or not serial or not uploaded_file:
+        st.error("Please fill all fields and upload an XML file.")
     else:
-        key_xml = generate_key_xml(email, serial, xml_input)
-        signature = sign_message(key_xml.encode())
-        st.code(json.dumps({"key_xml": key_xml, "signature": signature}, indent=2), language="json")
-
-# --- API Endpoint Simulation ---
-query_params = st.query_params  # <-- updated API
-if "api" in query_params:
-    import sys
-    body = sys.stdin.read()
-    try:
-        data = json.loads(body)
-        key_xml = generate_key_xml(data["email"], data["serial"], data["xml"])
-        sig = sign_message(key_xml.encode())
-        print(json.dumps({"key_xml": key_xml, "signature": sig}))
-    except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        # Send notification email with the uploaded XML file attached
+        send_notification(email, serial, uploaded_file)
+        
+        st.success("Request submitted successfully! You will receive the XML file via email.")
