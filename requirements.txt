@@ -2,3 +2,9 @@ flask==3.0.3
 requests==2.31.0
 python-dotenv==1.0.1
 paypalrestsdk
+streamlit
+gspread
+oauth2client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
