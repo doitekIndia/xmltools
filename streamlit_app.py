@@ -12,55 +12,46 @@ from paypalrestsdk import Payment, configure
 import json
 
 # ---------------------------
-# Serve robots.txt / sitemap.xml (best-effort: check environment, request vars, then fallback to query param)
+# Serve robots.txt / sitemap.xml
 # ---------------------------
 def _detect_request_path():
     """
-    Try several common environment/request variables to detect the requested path.
-    Streamlit Cloud may expose PATH_INFO or REQUEST_URI in the environment.
-    This is best-effort; if nothing is found, we'll rely on a query-param fallback.
+    Try to detect the requested path. Best-effort since Streamlit Cloud
+    doesn’t natively support route-based serving.
     """
+    import os
+    from urllib.parse import unquote
+
     candidates = []
 
     # Common CGI/WSGI env vars
     candidates.append(os.environ.get("PATH_INFO", ""))
-    candidates.append(os.environ.get("REQUEST_URI", ""))        # sometimes available
+    candidates.append(os.environ.get("REQUEST_URI", ""))
     candidates.append(os.environ.get("HTTP_X_ORIGINAL_URI", ""))
     candidates.append(os.environ.get("RAW_URI", ""))
-
-    # Try Streamlit query params as fallback (works reliably)
-    try:
-        q = st.experimental_get_query_params()
-        # join keys and values into a string to search for 'robots.txt' etc
-        qp_str = " ".join([f"{k}={'|'.join(v)}" for k, v in q.items()]) if isinstance(q, dict) else ""
-        candidates.append(qp_str)
-    except Exception:
-        candidates.append("")
-
-    # Also try to see if the full raw URL was passed as an env var
     candidates.append(os.environ.get("URL", ""))
     candidates.append(os.environ.get("VIRTUAL_HOST", ""))
 
-    # Add user-provided PATH via query param '?_path=' (if you want to test manually)
+    # Query param fallback
     try:
-        qp = st.experimental_get_query_params()
+        qp = st.query_params
+        qp_str = " ".join([f"{k}={'|'.join(v) if isinstance(v, list) else v}" for k, v in qp.items()])
+        candidates.append(qp_str)
         if "_path" in qp:
-            candidates.append(unquote(qp["_path"][0]))
+            candidates.append(unquote(qp["_path"]))
     except Exception:
         pass
 
-    # Return lowercased joined string for easy search
     return " ".join([str(c).lower() for c in candidates if c])
+
 
 _request_path = _detect_request_path()
 
-if "robots.txt" in _request_path or ("robots.txt" in st.experimental_get_query_params() if hasattr(st, "experimental_get_query_params") else False):
-    # Serve robots
+if "robots.txt" in _request_path:
     st.text("User-agent: *\nDisallow:\nSitemap: https://xmltools.streamlit.app/sitemap.xml")
     st.stop()
 
-if "sitemap.xml" in _request_path or ("sitemap.xml" in st.experimental_get_query_params() if hasattr(st, "experimental_get_query_params") else False):
-    # Serve sitemap
+if "sitemap.xml" in _request_path:
     st.write("""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -70,6 +61,7 @@ if "sitemap.xml" in _request_path or ("sitemap.xml" in st.experimental_get_query
 </urlset>
 """)
     st.stop()
+
 
 # ---------------------------
 # Streamlit page config
@@ -262,3 +254,4 @@ if st.button("📨 Send XML Request"):
         send_notification(email, serial, file_name, file_bytes)
         deduct_user_credits(email, 1)
         st.success("✅ Request submitted successfully! 1 credit deducted.")
+
