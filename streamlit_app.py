@@ -1,4 +1,7 @@
+import os
+from urllib.parse import unquote
 import streamlit as st
+import streamlit.components.v1 as components
 import gspread
 from google.oauth2.service_account import Credentials
 import smtplib
@@ -8,13 +11,56 @@ from email.mime.application import MIMEApplication
 from paypalrestsdk import Payment, configure
 import json
 
-# --- Handle robots.txt ---
-if st.get_option("server.baseUrlPath") in ["/robots.txt", "robots.txt"]:
-    st.write("User-agent: *\nDisallow:\nSitemap: https://xmltools.streamlit.app/sitemap.xml")
+# ---------------------------
+# Serve robots.txt / sitemap.xml (best-effort: check environment, request vars, then fallback to query param)
+# ---------------------------
+def _detect_request_path():
+    """
+    Try several common environment/request variables to detect the requested path.
+    Streamlit Cloud may expose PATH_INFO or REQUEST_URI in the environment.
+    This is best-effort; if nothing is found, we'll rely on a query-param fallback.
+    """
+    candidates = []
+
+    # Common CGI/WSGI env vars
+    candidates.append(os.environ.get("PATH_INFO", ""))
+    candidates.append(os.environ.get("REQUEST_URI", ""))        # sometimes available
+    candidates.append(os.environ.get("HTTP_X_ORIGINAL_URI", ""))
+    candidates.append(os.environ.get("RAW_URI", ""))
+
+    # Try Streamlit query params as fallback (works reliably)
+    try:
+        q = st.experimental_get_query_params()
+        # join keys and values into a string to search for 'robots.txt' etc
+        qp_str = " ".join([f"{k}={'|'.join(v)}" for k, v in q.items()]) if isinstance(q, dict) else ""
+        candidates.append(qp_str)
+    except Exception:
+        candidates.append("")
+
+    # Also try to see if the full raw URL was passed as an env var
+    candidates.append(os.environ.get("URL", ""))
+    candidates.append(os.environ.get("VIRTUAL_HOST", ""))
+
+    # Add user-provided PATH via query param '?_path=' (if you want to test manually)
+    try:
+        qp = st.experimental_get_query_params()
+        if "_path" in qp:
+            candidates.append(unquote(qp["_path"][0]))
+    except Exception:
+        pass
+
+    # Return lowercased joined string for easy search
+    return " ".join([str(c).lower() for c in candidates if c])
+
+_request_path = _detect_request_path()
+
+if "robots.txt" in _request_path or ("robots.txt" in st.experimental_get_query_params() if hasattr(st, "experimental_get_query_params") else False):
+    # Serve robots
+    st.text("User-agent: *\nDisallow:\nSitemap: https://xmltools.streamlit.app/sitemap.xml")
     st.stop()
 
-# --- Handle sitemap.xml ---
-if st.get_option("server.baseUrlPath") in ["/sitemap.xml", "sitemap.xml"]:
+if "sitemap.xml" in _request_path or ("sitemap.xml" in st.experimental_get_query_params() if hasattr(st, "experimental_get_query_params") else False):
+    # Serve sitemap
     st.write("""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -24,6 +70,7 @@ if st.get_option("server.baseUrlPath") in ["/sitemap.xml", "sitemap.xml"]:
 </urlset>
 """)
     st.stop()
+
 # ---------------------------
 # Streamlit page config
 # ---------------------------
@@ -34,47 +81,48 @@ st.set_page_config(
 )
 
 # ---------------------------
-# Inject SEO meta tags
+# Inject SEO meta tags invisibly (components.html height=0 so nothing displays)
 # ---------------------------
-st.markdown("""
-    <head>
-        <title>XML Key Generator Tool | Free Online XML Tools</title>
-        <meta name="description" content="Generate XML keys, manage device serials, and automate XML processing online. Secure and easy-to-use XML Key Generator with PayPal credits.">
-        <meta name="keywords" content="XML key generator, XML tools, online XML processing, XML file unlock, device serial XML, Hikvision XML, Dahua XML, IP camera XML reset">
-        <meta name="robots" content="index, follow">
-        <link rel="canonical" href="https://xmltools.streamlit.app/">
+seo_html = """
+<!-- Basic meta -->
+<meta name="description" content="Generate XML keys, manage device serials, and automate XML processing online. Secure and easy-to-use XML Key Generator with PayPal credits.">
+<meta name="keywords" content="XML key generator, XML tools, online XML processing, XML file unlock, device serial XML, Hikvision XML, Dahua XML, IP camera XML reset">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://xmltools.streamlit.app/">
 
-        <!-- Open Graph / Facebook -->
-        <meta property="og:title" content="XML Key Generator Tool">
-        <meta property="og:description" content="Upload your XML file, manage credits, and generate XML keys instantly online.">
-        <meta property="og:type" content="website">
-        <meta property="og:url" content="https://xmltools.streamlit.app/">
-        <meta property="og:image" content="https://xmltools.streamlit.app/static/xmltools-preview.png">
+<!-- Open Graph / Facebook -->
+<meta property="og:title" content="XML Key Generator Tool">
+<meta property="og:description" content="Upload your XML file, manage credits, and generate XML keys instantly online.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://xmltools.streamlit.app/">
+<meta property="og:image" content="https://xmltools.streamlit.app/static/xmltools-preview.png">
 
-        <!-- Twitter -->
-        <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="XML Key Generator Tool">
-        <meta name="twitter:description" content="Free online XML tools to generate and process XML keys.">
-        <meta name="twitter:image" content="https://xmltools.streamlit.app/static/xmltools-preview.png">
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="XML Key Generator Tool">
+<meta name="twitter:description" content="Free online XML tools to generate and process XML keys.">
+<meta name="twitter:image" content="https://xmltools.streamlit.app/static/xmltools-preview.png">
 
-        <!-- JSON-LD Structured Data -->
-        <script type="application/ld+json">
-        {
-            "@context": "https://schema.org",
-            "@type": "WebApplication",
-            "name": "XML Key Generator Tool",
-            "url": "https://xmltools.streamlit.app/",
-            "applicationCategory": "Utility",
-            "operatingSystem": "All",
-            "description": "Upload XML files, manage credits, and generate XML keys online securely.",
-            "creator": {
-                "@type": "Organization",
-                "name": "XML Tools"
-            }
-        }
-        </script>
-    </head>
-""", unsafe_allow_html=True)
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "XML Key Generator Tool",
+    "url": "https://xmltools.streamlit.app/",
+    "applicationCategory": "Utility",
+    "operatingSystem": "All",
+    "description": "Upload XML files, manage credits, and generate XML keys online securely.",
+    "creator": {
+        "@type": "Organization",
+        "name": "XML Tools"
+    }
+}
+</script>
+"""
+
+# inject invisibly (height=0 so it doesn't show in body)
+components.html(seo_html, height=0)
 
 # ---------------------------
 # Google Sheets setup
@@ -127,7 +175,10 @@ def get_user_credits(email):
     all_values = sheet.get_all_values()
     for row in all_values[1:]:
         if row[0] == email:
-            return int(row[1])
+            try:
+                return int(row[1])
+            except Exception:
+                return 0
     return 0
 
 def update_user_credits(email, added_credits):
