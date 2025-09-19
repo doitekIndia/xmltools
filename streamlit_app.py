@@ -71,6 +71,10 @@ st.set_page_config(
     page_icon="🔒",
     layout="wide"
 )
+# --- Google Search Console Verification ---
+st.markdown("""
+    <meta name="google-site-verification" content="BiEq9uMceJh5Kae4u-bIk0-vNdQQtrDznK-3aI719vg" />
+""", unsafe_allow_html=True)
 
 # ---------------------------
 # Inject SEO meta tags invisibly (components.html height=0 so nothing displays)
@@ -254,4 +258,5 @@ if st.button("📨 Send XML Request"):
         send_notification(email, serial, file_name, file_bytes)
         deduct_user_credits(email, 1)
         st.success("✅ Request submitted successfully! 1 credit deducted.")
+
 
