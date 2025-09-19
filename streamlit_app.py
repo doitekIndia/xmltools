@@ -8,10 +8,73 @@ from email.mime.application import MIMEApplication
 from paypalrestsdk import Payment, configure
 import json
 
+# --- Handle robots.txt ---
+if st.get_option("server.baseUrlPath") in ["/robots.txt", "robots.txt"]:
+    st.write("User-agent: *\nDisallow:\nSitemap: https://xmltools.streamlit.app/sitemap.xml")
+    st.stop()
+
+# --- Handle sitemap.xml ---
+if st.get_option("server.baseUrlPath") in ["/sitemap.xml", "sitemap.xml"]:
+    st.write("""<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://xmltools.streamlit.app/</loc>
+    <priority>1.0</priority>
+  </url>
+</urlset>
+""")
+    st.stop()
 # ---------------------------
 # Streamlit page config
 # ---------------------------
-st.set_page_config(page_title="XML Key Generator", page_icon="🔒")
+st.set_page_config(
+    page_title="XML Key Generator Tool | Free Online XML Tools",
+    page_icon="🔒",
+    layout="wide"
+)
+
+# ---------------------------
+# Inject SEO meta tags
+# ---------------------------
+st.markdown("""
+    <head>
+        <title>XML Key Generator Tool | Free Online XML Tools</title>
+        <meta name="description" content="Generate XML keys, manage device serials, and automate XML processing online. Secure and easy-to-use XML Key Generator with PayPal credits.">
+        <meta name="keywords" content="XML key generator, XML tools, online XML processing, XML file unlock, device serial XML, Hikvision XML, Dahua XML, IP camera XML reset">
+        <meta name="robots" content="index, follow">
+        <link rel="canonical" href="https://xmltools.streamlit.app/">
+
+        <!-- Open Graph / Facebook -->
+        <meta property="og:title" content="XML Key Generator Tool">
+        <meta property="og:description" content="Upload your XML file, manage credits, and generate XML keys instantly online.">
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://xmltools.streamlit.app/">
+        <meta property="og:image" content="https://xmltools.streamlit.app/static/xmltools-preview.png">
+
+        <!-- Twitter -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="XML Key Generator Tool">
+        <meta name="twitter:description" content="Free online XML tools to generate and process XML keys.">
+        <meta name="twitter:image" content="https://xmltools.streamlit.app/static/xmltools-preview.png">
+
+        <!-- JSON-LD Structured Data -->
+        <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "XML Key Generator Tool",
+            "url": "https://xmltools.streamlit.app/",
+            "applicationCategory": "Utility",
+            "operatingSystem": "All",
+            "description": "Upload XML files, manage credits, and generate XML keys online securely.",
+            "creator": {
+                "@type": "Organization",
+                "name": "XML Tools"
+            }
+        }
+        </script>
+    </head>
+""", unsafe_allow_html=True)
 
 # ---------------------------
 # Google Sheets setup
@@ -30,7 +93,7 @@ sheet = client.open_by_key(SPREADSHEET_ID).sheet1
 # ---------------------------
 paypal_conf = st.secrets["paypal"]
 configure({
-    "mode": paypal_conf["mode"],  # live
+    "mode": paypal_conf["mode"],
     "client_id": paypal_conf["client_id"],
     "client_secret": paypal_conf["client_secret"]
 })
@@ -74,7 +137,6 @@ def update_user_credits(email, added_credits):
             new_credits = int(row[1]) + added_credits
             sheet.update(f"B{i}", new_credits)
             return new_credits
-    # If user not exist, add new row
     sheet.append_row([email, added_credits])
     return added_credits
 
@@ -88,21 +150,26 @@ def deduct_user_credits(email, used_credits):
     return 0
 
 # ---------------------------
-# Streamlit UI
+# Streamlit UI (SEO-friendly headings)
 # ---------------------------
-st.title("XML Key Generator Tool")
-st.write("Upload your XML file and manage credits.")
+st.title("🔒 XML Key Generator Tool")
+st.markdown("""
+### Free Online XML Tools
+Upload your XML file, generate keys, and manage device serial numbers.  
+Our **XML Key Generator** is built for security professionals, system admins, and CCTV/IP camera users.
+""")
 
-email = st.text_input("Your Email ID")
-serial = st.text_input("Device Serial Number")
-uploaded_file = st.file_uploader("Attach XML Exported File", type="xml")
+email = st.text_input("📧 Your Email ID")
+serial = st.text_input("🔑 Device Serial Number")
+uploaded_file = st.file_uploader("📂 Attach XML Exported File", type="xml")
+
 credits = get_user_credits(email) if email else 0
-st.write(f"Your available credits: {credits}")
+st.write(f"💳 Your available credits: **{credits}**")
 
 # ---------------------------
 # PayPal payment
 # ---------------------------
-st.subheader("Buy Credits")
+st.subheader("💰 Buy Credits")
 credit_option = st.selectbox("Select Credit Pack", ["20 USD - 1 credit", "100 USD - 20 credits"])
 price, add_credits = (20, 1) if credit_option.startswith("20") else (100, 20)
 
@@ -111,8 +178,8 @@ if st.button("Pay via PayPal"):
         "intent": "sale",
         "payer": {"payment_method": "paypal"},
         "redirect_urls": {
-            "return_url": "https://your-deployment-url.com?success=true",  # replace with your Streamlit URL
-            "cancel_url": "https://your-deployment-url.com?cancel=true"
+            "return_url": "https://xmltools.streamlit.app?success=true",
+            "cancel_url": "https://xmltools.streamlit.app?cancel=true"
         },
         "transactions": [{
             "item_list": {"items": [{"name": f"{add_credits} Credits", "sku": "credits", "price": str(price), "currency": "USD", "quantity": 1}]},
@@ -133,14 +200,14 @@ if st.button("Pay via PayPal"):
 # ---------------------------
 # Submit XML Request
 # ---------------------------
-if st.button("Send XML Request"):
+if st.button("📨 Send XML Request"):
     if not email or not serial or not uploaded_file:
-        st.error("Please fill all fields and attach an XML file.")
+        st.error("⚠️ Please fill all fields and attach an XML file.")
     elif credits <= 0:
-        st.error("You have insufficient credits. Please purchase more credits.")
+        st.error("⚠️ You have insufficient credits. Please purchase more credits.")
     else:
         file_name = uploaded_file.name
         file_bytes = uploaded_file.read()
         send_notification(email, serial, file_name, file_bytes)
         deduct_user_credits(email, 1)
-        st.success("Request submitted successfully! 1 credit deducted.")
+        st.success("✅ Request submitted successfully! 1 credit deducted.")
