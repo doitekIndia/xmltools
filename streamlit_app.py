@@ -15,16 +15,8 @@ import json
 # Serve robots.txt / sitemap.xml
 # ---------------------------
 def _detect_request_path():
-    """
-    Try to detect the requested path. Best-effort since Streamlit Cloud
-    doesn’t natively support route-based serving.
-    """
-    import os
-    from urllib.parse import unquote
-
+    """Try to detect the requested path. Best-effort."""
     candidates = []
-
-    # Common CGI/WSGI env vars
     candidates.append(os.environ.get("PATH_INFO", ""))
     candidates.append(os.environ.get("REQUEST_URI", ""))
     candidates.append(os.environ.get("HTTP_X_ORIGINAL_URI", ""))
@@ -32,10 +24,11 @@ def _detect_request_path():
     candidates.append(os.environ.get("URL", ""))
     candidates.append(os.environ.get("VIRTUAL_HOST", ""))
 
-    # Query param fallback
     try:
         qp = st.query_params
-        qp_str = " ".join([f"{k}={'|'.join(v) if isinstance(v, list) else v}" for k, v in qp.items()])
+        qp_str = " ".join(
+            [f"{k}={'|'.join(v) if isinstance(v, list) else v}" for k, v in qp.items()]
+        )
         candidates.append(qp_str)
         if "_path" in qp:
             candidates.append(unquote(qp["_path"]))
@@ -71,15 +64,15 @@ st.set_page_config(
     page_icon="🔒",
     layout="wide"
 )
-# --- Google Search Console Verification ---
-st.markdown("""
-    <meta name="google-site-verification" content="BiEq9uMceJh5Kae4u-bIk0-vNdQQtrDznK-3aI719vg" />
-""", unsafe_allow_html=True)
 
 # ---------------------------
-# Inject SEO meta tags invisibly (components.html height=0 so nothing displays)
+# Inject SEO + Google verification (head only, no blank space)
 # ---------------------------
 seo_html = """
+<head>
+<!-- Google Search Console -->
+<meta name="google-site-verification" content="BiEq9uMceJh5Kae4u-bIk0-vNdQQtrDznK-3aI719vg" />
+
 <!-- Basic meta -->
 <meta name="description" content="Generate XML keys, manage device serials, and automate XML processing online. Secure and easy-to-use XML Key Generator with PayPal credits.">
 <meta name="keywords" content="XML key generator, XML tools, online XML processing, XML file unlock, device serial XML, Hikvision XML, Dahua XML, IP camera XML reset">
@@ -115,9 +108,8 @@ seo_html = """
     }
 }
 </script>
+</head>
 """
-
-# inject invisibly (height=0 so it doesn't show in body)
 components.html(seo_html, height=0)
 
 # ---------------------------
@@ -197,7 +189,7 @@ def deduct_user_credits(email, used_credits):
     return 0
 
 # ---------------------------
-# Streamlit UI (SEO-friendly headings)
+# Streamlit UI
 # ---------------------------
 st.title("🔒 XML Key Generator Tool")
 st.markdown("""
@@ -258,5 +250,3 @@ if st.button("📨 Send XML Request"):
         send_notification(email, serial, file_name, file_bytes)
         deduct_user_credits(email, 1)
         st.success("✅ Request submitted successfully! 1 credit deducted.")
-
-
