@@ -15,46 +15,47 @@ import json
 # Serve robots.txt / sitemap.xml
 # ---------------------------
 def _detect_request_path():
-    """Try to detect the requested path. Best-effort."""
-    candidates = []
-    candidates.append(os.environ.get("PATH_INFO", ""))
-    candidates.append(os.environ.get("REQUEST_URI", ""))
-    candidates.append(os.environ.get("HTTP_X_ORIGINAL_URI", ""))
-    candidates.append(os.environ.get("RAW_URI", ""))
-    candidates.append(os.environ.get("URL", ""))
-    candidates.append(os.environ.get("VIRTUAL_HOST", ""))
-
+    """
+    Detect the requested path for best-effort robots.txt / sitemap.xml
+    """
+    candidates = [
+        os.environ.get("PATH_INFO", ""),
+        os.environ.get("REQUEST_URI", ""),
+        os.environ.get("HTTP_X_ORIGINAL_URI", ""),
+        os.environ.get("RAW_URI", ""),
+        os.environ.get("URL", ""),
+        os.environ.get("VIRTUAL_HOST", "")
+    ]
     try:
         qp = st.query_params
-        qp_str = " ".join(
-            [f"{k}={'|'.join(v) if isinstance(v, list) else v}" for k, v in qp.items()]
-        )
-        candidates.append(qp_str)
         if "_path" in qp:
             candidates.append(unquote(qp["_path"]))
     except Exception:
         pass
-
     return " ".join([str(c).lower() for c in candidates if c])
-
 
 _request_path = _detect_request_path()
 
+# Serve robots.txt
 if "robots.txt" in _request_path:
-    st.text("User-agent: *\nDisallow:\nSitemap: https://xmltools.streamlit.app/sitemap.xml")
+    st.text(f"""User-agent: *
+Disallow:
+Sitemap: https://xmltools.streamlit.app/?sitemap.xml""")
     st.stop()
 
+# Serve sitemap.xml
 if "sitemap.xml" in _request_path:
-    st.write("""<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://xmltools.streamlit.app/</loc>
-    <priority>1.0</priority>
-  </url>
-</urlset>
-""")
+    # Add all important app URLs here
+    urls = [
+        "https://xmltools.streamlit.app/"
+        # Add more URLs if you have multiple pages/features
+    ]
+    st.write("""<?xml version="1.0" encoding="UTF-8"?>""")
+    st.write('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
+    for u in urls:
+        st.write(f"  <url>\n    <loc>{u}</loc>\n    <priority>1.0</priority>\n  </url>")
+    st.write("</urlset>")
     st.stop()
-
 
 # ---------------------------
 # Streamlit page config
@@ -66,14 +67,25 @@ st.set_page_config(
 )
 
 # ---------------------------
-# Inject SEO + Google verification (head only, no blank space)
+# Google Analytics GA4 snippet (Search Console verification)
+# ---------------------------
+ga_id = "G-FE844L69YN"  # Replace with your GA Measurement ID
+ga_snippet = f"""
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){{dataLayer.push(arguments);}}
+  gtag('js', new Date());
+  gtag('config', '{ga_id}');
+</script>
+"""
+components.html(ga_snippet, height=0)
+
+# ---------------------------
+# SEO meta tags (invisible)
 # ---------------------------
 seo_html = """
-<head>
-<!-- Google Search Console -->
-<meta name="google-site-verification" content="BiEq9uMceJh5Kae4u-bIk0-vNdQQtrDznK-3aI719vg" />
-
-<!-- Basic meta -->
 <meta name="description" content="Generate XML keys, manage device serials, and automate XML processing online. Secure and easy-to-use XML Key Generator with PayPal credits.">
 <meta name="keywords" content="XML key generator, XML tools, online XML processing, XML file unlock, device serial XML, Hikvision XML, Dahua XML, IP camera XML reset">
 <meta name="robots" content="index, follow">
@@ -108,7 +120,6 @@ seo_html = """
     }
 }
 </script>
-</head>
 """
 components.html(seo_html, height=0)
 
@@ -228,11 +239,10 @@ if st.button("Pay via PayPal"):
     })
 
     if payment.create():
-        st.success("✅ Payment created successfully. Please complete the payment on PayPal.")
+        st.success("✅ Payment created successfully. Complete payment on PayPal.")
         for link in payment.links:
             if link.rel == "approval_url":
-                approval_url = str(link.href)
-                st.markdown(f"[Click here to pay on PayPal]({approval_url})")
+                st.markdown(f"[Click here to pay on PayPal]({link.href})")
     else:
         st.error("❌ Payment creation failed. Check PayPal credentials.")
 
