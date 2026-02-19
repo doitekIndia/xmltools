@@ -154,7 +154,7 @@ with tab2:
 
     # QR Code
     st.image(
-        "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&cu=INR",
+        "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=nitinplus@okhdfcbank&pn=Nitin%20Khatri&cu=INR",
         caption="Scan to Pay"
     )
 
@@ -182,6 +182,7 @@ if st.button("🚀 Send Request (1 Credit)", type="primary", use_container_width
 
 st.markdown("---")
 st.caption("💡 Payments: Send screenshot to xmlkeyserver@gmail.com")
+
 
 
 
