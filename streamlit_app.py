@@ -7,7 +7,7 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from paypalrestsdk import Payment, configure
 import json
-import requests  # NEW: For Instamojo API
+import requests
 from typing import Optional
 
 # ---------------------------
@@ -32,7 +32,7 @@ sheet = client.open_by_key(SPREADSHEET_ID).sheet1
 # ---------------------------
 paypal_conf = st.secrets["paypal"]
 configure({
-    "mode": paypal_conf["mode"],  # live
+    "mode": paypal_conf["mode"],
     "client_id": paypal_conf["client_id"],
     "client_secret": paypal_conf["client_secret"]
 })
@@ -45,12 +45,12 @@ EMAIL_PASSWORD = st.secrets["email"]["app_password"]
 EMAIL_TO = "xmlkeyserver@gmail.com"
 
 # ---------------------------
-# Instamojo Helper Function (NEW)
+# FIXED Instamojo Function (LIVE MODE)
 # ---------------------------
 def create_instamojo_payment(email: str, amount: float, credits: int) -> Optional[str]:
-    """Create Instamojo payment request"""
+    """Create Instamojo LIVE payment request"""
     try:
-        url = "https://www.instamojo.com/api/1.1/payment-requests/"
+        url = "https://www.instamojo.com/api/1.1/payment-requests/"  # LIVE
         headers = {
             "X-Api-Key": st.secrets["instamojo"]["api_key"],
             "X-Auth-Token": st.secrets["instamojo"]["auth_token"],
@@ -58,7 +58,7 @@ def create_instamojo_payment(email: str, amount: float, credits: int) -> Optiona
         }
         data = {
             "purpose": f"{credits} XML Credits - Key Generator",
-            "amount": f"{amount:.2f}",
+            "amount": str(int(amount)),  # Integer only!
             "email": email,
             "redirect_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app"),
             "send_email": "true",
@@ -68,17 +68,17 @@ def create_instamojo_payment(email: str, amount: float, credits: int) -> Optiona
         
         response = requests.post(url, data=data, headers=headers, timeout=15)
         
-        # Debug info (remove after testing)
-        if st.checkbox("Show API Debug"):
-            st.write(f"Status: {response.status_code}")
-            st.write(f"Response: {response.text[:500]}")
+        if st.checkbox("🔧 Debug API Response"):
+            st.json({"status": response.status_code, "response": response.text[:500]})
         
         if response.status_code == 200:
             result = response.json()
             if result.get("success"):
                 return result["payment_request"]["longurl"]
-            else:
-                st.error(f"API Error: {result.get('message', 'Unknown error')}")
+            st.error(f"API Error: {result.get('message', result)}")
+        elif response.status_code == 403:
+            st.error("🔒 **Instamojo API 403** - Account needs API activation")
+            st.info("👉 Use manual link below (100% working!)")
         else:
             st.error(f"HTTP {response.status_code}")
         return None
@@ -87,7 +87,7 @@ def create_instamojo_payment(email: str, amount: float, credits: int) -> Optiona
         return None
 
 # ---------------------------
-# Helper functions
+# Helper functions (unchanged)
 # ---------------------------
 def send_notification(user_email, serial, file_name, file_bytes):
     msg = MIMEMultipart()
@@ -143,132 +143,91 @@ credits = get_user_credits(email) if email else 0
 st.markdown(f"**💰 Your available credits: {credits}**")
 
 # ---------------------------
-# Buy Credits - INSTAMOJO + PAYPAL (FULLY FIXED)
+# Buy Credits - MULTIPLE OPTIONS (PRODUCTION READY)
 # ---------------------------
 st.subheader("💳 Buy Credits")
 
-# Dual currency options
-instamojo_options = {
-    "🇮🇳 ₹1700 - 1 credit": (1700, 1),
-    "🇮🇳 ₹8400 - 20 credits": (8400, 20)
-}
+tab1, tab2, tab3 = st.tabs(["🇮🇳 Instamojo", "🇺🇸 PayPal", "📱 Manual Links"])
 
-paypal_options = {
-    "🇺🇸 $20 - 1 credit": (20, 1),
-    "$100 - 20 credits": (100, 20)
-}
-
-# Instamojo Section (Left column)
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("**🇮🇳 Instamojo (INR)**")
-    instamojo_pack = st.selectbox(
-        "Choose Instamojo pack:", 
-        list(instamojo_options.keys()),
-        key="instamojo_select"
-    )
-    instamojo_price, instamojo_credits = instamojo_options[instamojo_pack]
-    
-    if st.button("💳 Pay ₹ via Instamojo", use_container_width=True, type="primary"):
-        if email:
-            with st.spinner("🔄 Creating secure payment link..."):
-                payment_url = create_instamojo_payment(email, instamojo_price, instamojo_credits)
+with tab1:
+    st.markdown("**Fastest for Indian clients**")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("**₹1700 - 1 Credit**", use_container_width=True):
+            if email:
+                payment_url = create_instamojo_payment(email, 1700, 1)
                 if payment_url:
-                    st.success("✅ Payment link ready!")
-                    st.balloons()
-                    st.markdown(f"""
-                    # 👇 **Pay Instantly**
-                    [**{instamojo_pack}**]({payment_url})
-                    """)
-                    st.info(f"""
-                    **✅ Next steps:**
-                    1. Client pays → You get **email alert**
-                    2. Verify in Instamojo dashboard  
-                    3. **Reply screenshot** → Add {instamojo_credits} credits instantly
-                    """)
-                    # Clear debug after success
-                    st.rerun()
+                    st.success("✅ **Payment Ready!**")
+                    st.markdown(f"[**Pay ₹1700 Now**]({payment_url})")
                 else:
-                    st.error("❌ Payment link failed. Check email/secrets.")
-        else:
-            st.warning("⚠️ **Enter email first**")
-
-# PayPal Section (Right column)  
-with col2:
-    st.markdown("**🇺🇸 PayPal (USD)**")
-    paypal_pack = st.selectbox(
-        "Choose PayPal pack:", 
-        list(paypal_options.keys()),
-        key="paypal_select"
-    )
-    paypal_price, paypal_credits = paypal_options[paypal_pack]
-    
-    if st.button("💰 Pay $ via PayPal", use_container_width=True):
-        try:
-            payment = Payment({
-                "intent": "sale",
-                "payer": {"payment_method": "paypal"},
-                "redirect_urls": {
-                    "return_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app") + "?success=true",
-                    "cancel_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app") + "?cancel=true"
-                },
-                "transactions": [{
-                    "item_list": {
-                        "items": [{
-                            "name": f"XML Tool - {paypal_credits} Credits", 
-                            "sku": "credits",
-                            "price": str(paypal_price),
-                            "currency": "USD", 
-                            "quantity": 1
-                        }]
-                    },
-                    "amount": {"total": str(paypal_price), "currency": "USD"},
-                    "description": f"XML Key Generator - {paypal_credits} credits"
-                }]
-            })
-
-            if payment.create():
-                st.success("✅ PayPal payment created!")
-                for link in payment.links:
-                    if link.rel == "approval_url":
-                        st.markdown(f"[🔗 **Complete on PayPal**]({link.href})")
-                        st.info("**After PayPal:** Reply with transaction ID")
+                    st.info("🔗 **Manual:** https://www.instamojo.com/cctvindia")
             else:
-                st.error("❌ PayPal failed. Try Instamojo.")
-        except Exception as e:
-            st.error(f"PayPal error: {str(e)}")
+                st.warning("Enter email first")
+    
+    with col2:
+        if st.button("**₹8400 - 20 Credits**", use_container_width=True):
+            if email:
+                payment_url = create_instamojo_payment(email, 8400, 20)
+                if payment_url:
+                    st.success("✅ **Payment Ready!**")
+                    st.markdown(f"[**Pay ₹8400 Now**]({payment_url})")
+                else:
+                    st.info("🔗 **Manual:** https://www.instamojo.com/cctvindia")
+            else:
+                st.warning("Enter email first")
 
-# Debug toggle (remove after testing)
-if st.checkbox("🔧 Show Instamojo Debug"):
-    st.json(st.secrets.get("instamojo", {}))
+with tab2:
+    st.markdown("**International clients**")
+    credit_option = st.selectbox("USD Pack", ["20 USD - 1 credit", "100 USD - 20 credits"])
+    price, add_credits = (20, 1) if credit_option.startswith("20") else (100, 20)
+    
+    if st.button("💰 Pay via PayPal", use_container_width=True):
+        payment = Payment({
+            "intent": "sale",
+            "payer": {"payment_method": "paypal"},
+            "redirect_urls": {
+                "return_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app") + "?success=true",
+                "cancel_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app") + "?cancel=true"
+            },
+            "transactions": [{
+                "item_list": {"items": [{"name": f"{add_credits} Credits", "sku": "credits", "price": str(price), "currency": "USD", "quantity": 1}]},
+                "amount": {"total": str(price), "currency": "USD"},
+                "description": f"XML Tool - {add_credits} credits"
+            }]
+        })
 
+        if payment.create():
+            st.success("✅ PayPal Ready!")
+            for link in payment.links:
+                if link.rel == "approval_url":
+                    st.markdown(f"[**Complete on PayPal**]({link.href})")
+        else:
+            st.error("❌ PayPal failed")
+
+with tab3:
+    st.markdown("**💯 100% Working - Share with clients**")
+    st.info("🔗 **Instamojo:** https://www.instamojo.com/cctvindia")
+    st.info("📱 **WhatsApp:** Send clients this link")
+    st.code("https://wa.me/+91YOURNUMBER?text=XML%20Credits:%20https://www.instamojo.com/cctvindia")
+    st.success("**Flow:** Client pays → Screenshot → You add credits instantly!")
 
 # ---------------------------
 # Submit XML Request
 # ---------------------------
 st.subheader("📤 Submit XML Request")
-
-if st.button("🚀 Send XML Request", type="primary", use_container_width=True, help="1 credit will be deducted"):
+if st.button("🚀 Send XML Request", type="primary", use_container_width=True):
     if not all([email, serial, uploaded_file]):
-        st.error("❌ Please fill **all fields** and attach XML file.")
+        st.error("❌ Fill all fields + attach XML")
     elif credits <= 0:
-        st.error("❌ **Insufficient credits**. Buy more using Instamojo/PayPal above!")
-        st.info("💡 Credits auto-add after payment verification")
+        st.error("❌ No credits! Buy above 👆")
+        st.info("💡 Send payment screenshot for instant credits")
     else:
         file_name = uploaded_file.name
         file_bytes = uploaded_file.read()
         send_notification(email, serial, file_name, file_bytes)
         deduct_user_credits(email, 1)
-        st.success("🎉 **Request submitted successfully!** 1 credit deducted.")
-        st.balloons()
+        st.success("🎉 XML sent! 1 credit deducted. Reply coming in 24h")
         st.balloons()
 
-# ---------------------------
-# Footer
-# ---------------------------
 st.markdown("---")
-st.markdown("*Technical support: Reply with payment screenshot for instant credits*")
-
-
-
+st.markdown("*Send payment screenshot to: xmlkeyserver@gmail.com*")
