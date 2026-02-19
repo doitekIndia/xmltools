@@ -8,6 +8,7 @@ from email.mime.application import MIMEApplication
 from paypalrestsdk import Payment, configure
 import json
 import requests  # NEW: For Instamojo API
+from typing import Optional
 
 # ---------------------------
 # Streamlit page config
@@ -47,42 +48,43 @@ EMAIL_TO = "xmlkeyserver@gmail.com"
 # Instamojo Helper Function (NEW)
 # ---------------------------
 def create_instamojo_payment(email: str, amount: float, credits: int) -> Optional[str]:
-    """Create Instamojo payment request - FIXED"""
+    """Create Instamojo payment request"""
     try:
         url = "https://www.instamojo.com/api/1.1/payment-requests/"
         headers = {
             "X-Api-Key": st.secrets["instamojo"]["api_key"],
             "X-Auth-Token": st.secrets["instamojo"]["auth_token"],
-            "Content-Type": "application/x-www-form-urlencoded"  # ✅ FIXED!
+            "Content-Type": "application/x-www-form-urlencoded"
         }
         data = {
-            "purpose": f"{credits} XML Credits",
-            "amount": f"{amount:.2f}",  # ✅ Formatted
+            "purpose": f"{credits} XML Credits - Key Generator",
+            "amount": f"{amount:.2f}",
             "email": email,
             "redirect_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app"),
             "send_email": "true",
-            "send_sms": "true"
+            "send_sms": "true",
+            "allow_repeated_payments": "false"
         }
         
-        st.info(f"🔍 Testing API with: {amount} to {email}")  # Debug
-        
         response = requests.post(url, data=data, headers=headers, timeout=15)
-        st.write(f"📡 Status: {response.status_code}")  # Debug
-        st.write(f"📄 Response: {response.text[:300]}")  # Debug
+        
+        # Debug info (remove after testing)
+        if st.checkbox("Show API Debug"):
+            st.write(f"Status: {response.status_code}")
+            st.write(f"Response: {response.text[:500]}")
         
         if response.status_code == 200:
             result = response.json()
             if result.get("success"):
                 return result["payment_request"]["longurl"]
             else:
-                st.error(f"API Error: {result}")
+                st.error(f"API Error: {result.get('message', 'Unknown error')}")
         else:
-            st.error(f"HTTP {response.status_code}: {response.text[:200]}")
+            st.error(f"HTTP {response.status_code}")
         return None
     except Exception as e:
         st.error(f"Connection error: {str(e)}")
         return None
-
 
 # ---------------------------
 # Helper functions
@@ -234,4 +236,5 @@ if st.button("🚀 Send XML Request", type="primary", use_container_width=True, 
 # ---------------------------
 st.markdown("---")
 st.markdown("*Technical support: Reply with payment screenshot for instant credits*")
+
 
