@@ -133,13 +133,33 @@ with tab1:
             st.error("PayPal failed")
 
 with tab2:
-    st.success("**💯 Manual Payment Links**")
+    st.success("💯 UPI Payment")
+
+    UPI_ID = "nitinplus@hdfcbank"
+
     col1, col2 = st.columns(2)
+
     with col1:
-        st.markdown("**[₹1700 - 1 Credit](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=1700&cu=INR)**")
+        st.markdown("### ₹1700 — 1 Credit")
+        st.markdown("[👉 Pay via UPI](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=1700&cu=INR)")
+
     with col2:
-        st.markdown("**[₹8400 - 20 Credits](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=8400&cu=INR)**")
-    st.info("Client pays → Send screenshot → Credits added")
+        st.markdown("### ₹8400 — 20 Credits")
+        st.markdown("[👉 Pay via UPI](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=8400&cu=INR)")
+
+    st.info("💻 On desktop? Scan QR or copy UPI ID")
+
+    # Copy UPI ID
+    st.code(UPI_ID)
+
+    # QR Code
+    st.image(
+        "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&cu=INR",
+        caption="Scan to Pay"
+    )
+
+    st.warning("After payment send screenshot to xmlkeyserver@gmail.com")
+
 
 # ---------------------------
 # Submit XML Request
@@ -162,5 +182,6 @@ if st.button("🚀 Send Request (1 Credit)", type="primary", use_container_width
 
 st.markdown("---")
 st.caption("💡 Payments: Send screenshot to xmlkeyserver@gmail.com")
+
 
 
