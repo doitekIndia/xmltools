@@ -30,7 +30,7 @@ sheet = client.open_by_key(SPREADSHEET_ID).sheet1
 # ---------------------------
 paypal_conf = st.secrets["paypal"]
 configure({
-    "mode": paypal_conf["mode"],
+    "mode": paypal_conf["mode"],  # live
     "client_id": paypal_conf["client_id"],
     "client_secret": paypal_conf["client_secret"]
 })
@@ -74,6 +74,7 @@ def update_user_credits(email, added_credits):
             new_credits = int(row[1]) + added_credits
             sheet.update(f"B{i}", new_credits)
             return new_credits
+    # If user not exist, add new row
     sheet.append_row([email, added_credits])
     return added_credits
 
@@ -89,100 +90,59 @@ def deduct_user_credits(email, used_credits):
 # ---------------------------
 # Streamlit UI
 # ---------------------------
-st.title("🔒 XML Key Generator Tool")
+st.title("XML Key Generator Tool")
 st.write("Upload your XML file and manage credits.")
 
-email = st.text_input("📧 Your Email ID")
-serial = st.text_input("🔢 Device Serial Number")
-uploaded_file = st.file_uploader("📎 Attach XML Exported File", type="xml")
+email = st.text_input("Your Email ID")
+serial = st.text_input("Device Serial Number")
+uploaded_file = st.file_uploader("Attach XML Exported File", type="xml")
 credits = get_user_credits(email) if email else 0
-st.markdown(f"**💰 Your available credits: {credits}**")
+st.write(f"Your available credits: {credits}")
 
 # ---------------------------
-# Buy Credits
+# PayPal payment
 # ---------------------------
-st.subheader("💳 Buy Credits")
+st.subheader("Buy Credits")
+credit_option = st.selectbox("Select Credit Pack", ["20 USD - 1 credit", "100 USD - 20 credits"])
+price, add_credits = (20, 1) if credit_option.startswith("20") else (100, 20)
 
-tab1, tab2 = st.tabs(["🇺🇸 PayPal", "📱 Manual"])
+if st.button("Pay via PayPal"):
+    payment = Payment({
+        "intent": "sale",
+        "payer": {"payment_method": "paypal"},
+        "redirect_urls": {
+            "return_url": "https://your-deployment-url.com?success=true",  # replace with your Streamlit URL
+            "cancel_url": "https://your-deployment-url.com?cancel=true"
+        },
+        "transactions": [{
+            "item_list": {"items": [{"name": f"{add_credits} Credits", "sku": "credits", "price": str(price), "currency": "USD", "quantity": 1}]},
+            "amount": {"total": str(price), "currency": "USD"},
+            "description": f"Purchase {add_credits} credits for XML tool"
+        }]
+    })
 
-with tab1:
-    st.markdown("**PayPal for international clients**")
-    credit_option = st.selectbox("Select USD pack", ["20 USD - 1 credit", "100 USD - 20 credits"])
-    price, add_credits = (20, 1) if credit_option.startswith("20") else (100, 20)
-
-    if st.button("💰 PayPal", use_container_width=True):
-        payment = Payment({
-            "intent": "sale",
-            "payer": {"payment_method": "paypal"},
-            "redirect_urls": {
-                "return_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app") + "?success=true",
-                "cancel_url": st.secrets.get("APP_URL", "https://your-app.streamlit.app") + "?cancel=true"
-            },
-            "transactions": [{
-                "item_list": {"items": [{"name": f"{add_credits} Credits", "sku": "credits", "price": str(price), "currency": "USD", "quantity": 1}]},
-                "amount": {"total": str(price), "currency": "USD"},
-                "description": f"XML Tool Credits"
-            }]
-        })
-        if payment.create():
-            st.success("✅ PayPal ready!")
-            for link in payment.links:
-                if link.rel == "approval_url":
-                    st.markdown(f"[**PayPal**]({link.href})")
-        else:
-            st.error("PayPal failed")
-
-with tab2:
-    st.success("💯 UPI Payment")
-
-    UPI_ID = "nitinplus@hdfcbank"
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("### ₹1700 — 1 Credit")
-        st.markdown("[👉 Pay via UPI](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=1700&cu=INR)")
-
-    with col2:
-        st.markdown("### ₹8400 — 20 Credits")
-        st.markdown("[👉 Pay via UPI](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=8400&cu=INR)")
-
-    st.info("💻 On desktop? Scan QR or copy UPI ID")
-
-    # Copy UPI ID
-    st.code(UPI_ID)
-
-    # QR Code
-    st.image(
-        "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=nitinplus@okhdfcbank&pn=Nitin%20Khatri&cu=INR",
-        caption="Scan to Pay"
-    )
-
-    st.warning("After payment send screenshot to xmlkeyserver@gmail.com")
-
+    if payment.create():
+        st.success("✅ Payment created successfully. Please complete the payment on PayPal.")
+        for link in payment.links:
+            if link.rel == "approval_url":
+                approval_url = str(link.href)
+                st.markdown(f"[Click here to pay on PayPal]({approval_url})")
+    else:
+        st.error("❌ Payment creation failed. Check PayPal credentials.")
 
 # ---------------------------
 # Submit XML Request
 # ---------------------------
-st.subheader("📤 Submit XML Request")
-
-if st.button("🚀 Send Request (1 Credit)", type="primary", use_container_width=True):
-    if not all([email, serial, uploaded_file]):
-        st.error("❌ Fill all fields + XML file")
+if st.button("Send XML Request"):
+    if not email or not serial or not uploaded_file:
+        st.error("Please fill all fields and attach an XML file.")
     elif credits <= 0:
-        st.error("❌ No credits! Buy above 👆")
-        st.rerun()
+        st.error("You have insufficient credits. Please purchase more credits.")
     else:
         file_name = uploaded_file.name
         file_bytes = uploaded_file.read()
         send_notification(email, serial, file_name, file_bytes)
         deduct_user_credits(email, 1)
-        st.success("🎉 XML submitted! Check email in 24h")
-        st.balloons()
-
-st.markdown("---")
-st.caption("💡 Payments: Send screenshot to xmlkeyserver@gmail.com")
-
-
+        st.success("Request submitted successfully! 1 credit deducted.")
 
 
