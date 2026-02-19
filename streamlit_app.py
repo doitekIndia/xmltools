@@ -136,9 +136,9 @@ with tab2:
     st.success("**💯 Manual Payment Links**")
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**[₹1700 - 1 Credit](https://www.instamojo.com/cctvindia)**")
+        st.markdown("**[₹1700 - 1 Credit](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=1700&cu=INR)**")
     with col2:
-        st.markdown("**[₹8400 - 20 Credits](https://www.instamojo.com/cctvindia)**")
+        st.markdown("**[₹8400 - 20 Credits](upi://pay?pa=nitinplus@hdfcbank&pn=Nitin%20Khatri&am=1700&cu=INR)**")
     st.info("Client pays → Send screenshot → Credits added")
 
 # ---------------------------
@@ -162,3 +162,4 @@ if st.button("🚀 Send Request (1 Credit)", type="primary", use_container_width
 
 st.markdown("---")
 st.caption("💡 Payments: Send screenshot to xmlkeyserver@gmail.com")
+
